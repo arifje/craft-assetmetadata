@@ -42,7 +42,12 @@ class Metadata extends Component
     {
         $metadata = $this->extract($asset, null, $field);
 
+		if(is_null($field->subfields)) {
+			return [];
+		}	
+		
         $value = [];
+		
         foreach ($field->subfields as $id => $subfield) {
             try {
                 $twig = '{% autoescape false %}'.$subfield['template'].'{% endautoescape %}';
@@ -53,7 +58,7 @@ class Metadata extends Component
                 Craft::error('Error rendering the template for "'.$field->handle.':'.$subfield['handle'].'": '.$e->getMessage(), __METHOD__);
             }
         }
-
+		
         return $value;
     }
 

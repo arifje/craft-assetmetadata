@@ -32,7 +32,9 @@ class MetadataController extends Controller
         }
 
         $value = Plugin::getInstance()->getMetadata()->getFieldValue($field, $asset);
-
+		
+		Craft::error("jemoeder " . json_encode($value) );
+		
         return $this->asJson($value);
     }
 }

@@ -1,21 +1,36 @@
 {% import '_includes/forms' as forms %}
 
-<div class="assetmetadata-field">
-    {% for id, subfield in field.subfields %}
-        <div class="assetmetadata-subfield">
-            <div class="assetmetadata-subfield-heading">
-                <label>{{ subfield.name|t('asset-metadata') }}</label>
-            </div>
+{% do view.registerAssetBundle("carlcs\\assetmetadata\\web\\assets\\FieldAsset") %}
 
-            {{ forms.text({
-                id: null,
-                name: name~'['~id~']',
-                value: value[id] ?? '',
-                class: 'nicetext',
-                readonly: readOnly
-            }) }}
-        </div>
-    {% endfor %}
+{% set baseAssetsUrl = view.getAssetManager().getPublishedUrl('@carlcs/assetmetadata/web/assets/dist', true) %}
+{% set exampleImage = baseAssetsUrl ~ '/subfields-example.png' %}
+
+<div class="assetmetadata-field">
+	{% if field.subfields | length < 1 %}
+		No subfields found. Define them in the settings of the Field.
+		
+		<br /><br />
+		<h2>Example</h2>
+		(click to enlarge)<br />
+		<a href="{{ exampleImage }}" target="_blank"><img src="{{ exampleImage }}"></a>
+
+	{% else %}
+    	{% for id, subfield in field.subfields %}
+        	<div class="assetmetadata-subfield">
+            	<div class="assetmetadata-subfield-heading">
+                	<label>{{ subfield.name|t('asset-metadata') }}</label>
+            	</div>
+	
+            	{{ forms.text({
+                	id: null,
+                	name: name~'['~id~']',
+                	value: value[id] ?? '',
+                	class: 'nicetext',
+                	readonly: readOnly
+            	}) }}
+        	</div>
+    	{% endfor %}
+	{% endif %}
 
     {% if not readOnly %}
         <div class="assetmetadata-refresh btn">{{ 'Refresh'|t('asset-metadata') }}</div>
@@ -35,3 +50,4 @@
         new Craft.AssetMetadata.Field({{ settings|json_encode|raw }});
     {% endjs %}
 {% endif %}
+
