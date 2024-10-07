@@ -12,6 +12,8 @@ use craft\elements\Asset;
 use craft\events\RegisterComponentTypesEvent;
 use craft\events\RegisterElementTableAttributesEvent;
 use craft\events\SetElementTableAttributeHtmlEvent;
+use craft\events\RegisterElementSourcesEvent;
+use craft\events\DefineAttributeHtmlEvent;
 use craft\services\Fields;
 use yii\base\Event;
 
@@ -84,7 +86,12 @@ class Plugin extends \craft\base\Plugin
             $event->tableAttributes = array_merge($event->tableAttributes, $this->_tableAttributes);
         });
 
-        Event::on(Asset::class, Element::EVENT_SET_TABLE_ATTRIBUTE_HTML, function(SetElementTableAttributeHtmlEvent $event){
+		// Support for Craft 4 and 5
+		$eventName = version_compare(Craft::$app->getVersion(), '5.0', '>=') 
+		? Element::EVENT_DEFINE_ATTRIBUTE_HTML 
+		: Element::EVENT_SET_TABLE_ATTRIBUTE_HTML;
+			
+        Event::on(Asset::class, $eventName, function($event){
             if (isset($this->_tableAttributes[$event->attribute])) {
                 list(, $fieldHandle, $subfieldHandle) = explode(':', $event->attribute);
 
