@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.1.0 - 2024-10-07
+
+### Added
+- Craft 5 compatibility
+- Example of subfields
+- Null check in service
+
 ## 4.0.0 - 2022-04-14
 
 ### Added
