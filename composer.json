@@ -63,7 +63,7 @@
     "name": "Asset Metadata",
     "class": "carlcs\\assetmetadata\\Plugin",
     "documentationUrl": "https://github.com/arifje/craft-assetmetadata#readme",
-    "changelogUrl": "https://raw.githubusercontent.com/arifje/craft-assetmetadata/v5/CHANGELOG.md"
+    "changelogUrl": "https://raw.githubusercontent.com/arifje/craft-assetmetadata/main/CHANGELOG.md"
   },
   "config": {
     "allow-plugins": {

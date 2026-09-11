@@ -29,4 +29,4 @@ These rules apply to any AI agent (and human) working in this repository.
 
 ## Releases
 - Bump `composer.json` `version` and add a dated CHANGELOG heading (the unit tests check they match),
-  then tag the release from the `v5` branch.
+  then tag the release from the `main` branch (`v4` only carries the old 4.0.0 release).
