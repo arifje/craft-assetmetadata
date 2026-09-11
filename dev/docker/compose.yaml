@@ -1,0 +1,100 @@
+name: craft-assetmetadata-dev
+
+x-craft-env: &craft-env
+  CRAFT_ENVIRONMENT: dev
+  CRAFT_DB_DRIVER: mysql
+  CRAFT_DB_PORT: "3306"
+  CRAFT_DB_DATABASE: craft
+  CRAFT_DB_USER: craft
+  CRAFT_DB_PASSWORD: craft
+  CRAFT_DB_TABLE_PREFIX: ""
+  CRAFT_DEV_MODE: "true"
+  CRAFT_ALLOW_ADMIN_CHANGES: "true"
+  CRAFT_DISALLOW_ROBOTS: "true"
+  CRAFT_ALLOW_SUPERUSER: "1"
+  # Browsers hold several idle keep-alive sockets per host and PHP's built-in server
+  # has no read timeout, so keep the worker pool well above a browser's connection limit.
+  PHP_CLI_SERVER_WORKERS: "12"
+  DEV_ADMIN_EMAIL: admin@example.com
+  DEV_ADMIN_USERNAME: admin
+  DEV_ADMIN_PASSWORD: password
+  # Dev-only: CP requests auto-login as the admin (see scripts/app.web.php).
+  DEV_AUTOLOGIN: "1"
+
+x-db: &db
+  image: mysql:8.0
+  # Small buffers: this is a test database, and several harnesses may share one Docker host.
+  command: --default-authentication-plugin=mysql_native_password --innodb-buffer-pool-size=64M --performance-schema=0
+  restart: unless-stopped
+  environment:
+    MYSQL_DATABASE: craft
+    MYSQL_USER: craft
+    MYSQL_PASSWORD: craft
+    MYSQL_ROOT_PASSWORD: root
+  healthcheck:
+    test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+    interval: 5s
+    timeout: 5s
+    retries: 30
+
+services:
+  db4:
+    <<: *db
+    profiles: ["craft4"]
+    volumes:
+      - db4data:/var/lib/mysql
+
+  craft4:
+    build: .
+    profiles: ["craft4"]
+    restart: unless-stopped
+    depends_on:
+      db4:
+        condition: service_healthy
+    ports:
+      - "8464:80"
+    environment:
+      <<: *craft-env
+      CRAFT_MAJOR: "4"
+      CRAFT_APP_ID: AssetMetadataCraft4
+      CRAFT_SECURITY_KEY: "c4-dev-key-a1b2c3d4e5f60718293a4b5c6d7e8f90"
+      CRAFT_DB_SERVER: db4
+      PRIMARY_SITE_URL: "http://localhost:8464"
+    volumes:
+      - ../craft4:/app
+      - ../..:/plugin
+      - ./scripts:/scripts
+      - composer-cache:/root/.composer/cache
+
+  db5:
+    <<: *db
+    profiles: ["craft5"]
+    volumes:
+      - db5data:/var/lib/mysql
+
+  craft5:
+    build: .
+    profiles: ["craft5"]
+    restart: unless-stopped
+    depends_on:
+      db5:
+        condition: service_healthy
+    ports:
+      - "8565:80"
+    environment:
+      <<: *craft-env
+      CRAFT_MAJOR: "5"
+      CRAFT_APP_ID: AssetMetadataCraft5
+      CRAFT_SECURITY_KEY: "c5-dev-key-0f9e8d7c6b5a49382716051423324150"
+      CRAFT_DB_SERVER: db5
+      PRIMARY_SITE_URL: "http://localhost:8565"
+    volumes:
+      - ../craft5:/app
+      - ../..:/plugin
+      - ./scripts:/scripts
+      - composer-cache:/root/.composer/cache
+
+volumes:
+  db4data:
+  db5data:
+  composer-cache:

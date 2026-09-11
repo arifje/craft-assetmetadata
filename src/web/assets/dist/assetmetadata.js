@@ -1,41 +1,68 @@
-(function($){
-
-if (typeof Craft.AssetMetadata === typeof undefined) {
+(function ($) {
+  if (typeof Craft.AssetMetadata === typeof undefined) {
     Craft.AssetMetadata = {};
-}
+  }
 
-Craft.AssetMetadata.Field = Garnish.Base.extend({
+  /**
+   * Asset Metadata field: refreshes the subfield inputs with freshly extracted metadata.
+   */
+  Craft.AssetMetadata.Field = Garnish.Base.extend({
     $field: null,
     $refreshBtn: null,
     $spinner: null,
+    busy: false,
 
-    init: function(settings) {
-        this.setSettings(settings);
+    init: function (settings) {
+      this.setSettings(settings);
 
-        this.$field = $(`#${this.settings.id}-field`);
-        this.$refreshBtn = this.$field.find('.assetmetadata-refresh');
-        this.$spinner = this.$field.find('.spinner');
+      // Craft wraps a field’s input in a container with the ID `<inputId>-field`
+      this.$field = $('#' + this.settings.id + '-field');
 
-        this.addListener(this.$refreshBtn, 'activate', 'updateField');
+      if (!this.$field.length) {
+        this.$field = $('#' + this.settings.id).closest('.field');
+      }
+
+      this.$refreshBtn = this.$field.find('.assetmetadata-refresh');
+      this.$spinner = this.$field.find('.assetmetadata-field .spinner');
+
+      this.addListener(this.$refreshBtn, 'activate', 'updateField');
     },
 
-    updateField: function() {
-        this.$spinner.removeClass('hidden');
+    updateField: function () {
+      if (this.busy) {
+        return;
+      }
 
-        const data = {
-            fieldId: this.settings.fieldId,
-            elementId: this.settings.elementId,
-        };
+      this.busy = true;
+      this.$spinner.removeClass('hidden');
+      this.$refreshBtn.addClass('disabled');
 
-        Craft.sendActionRequest('POST', 'asset-metadata/metadata/get-field-value', { data })
-            .then(({ data }) => {
-                this.$spinner.addClass('hidden');
-                data.forEach((value, index) => {
-                    const input = this.$field.find(`input[name="${this.settings.name}[${index}]"]`);
-                    input.val(value);
-                });
-            });
+      const data = {
+        fieldId: this.settings.fieldId,
+        elementId: this.settings.elementId,
+        siteId: this.settings.siteId,
+      };
+
+      Craft.sendActionRequest('POST', 'asset-metadata/metadata/get-field-value', {data})
+        .then((response) => {
+          // The values are keyed by subfield ID, so they arrive as an object rather than an array
+          const values = (response.data && response.data.value) || {};
+
+          Object.keys(values).forEach((subfieldId) => {
+            const $input = this.$field.find('input[name="' + this.settings.name + '[' + subfieldId + ']"]');
+            $input.val(values[subfieldId]).trigger('change');
+          });
+        })
+        .catch((error) => {
+          const message = (error.response && error.response.data && error.response.data.message) ||
+            Craft.t('asset-metadata', 'Could not refresh the metadata.');
+          Craft.cp.displayError(message);
+        })
+        .finally(() => {
+          this.$spinner.addClass('hidden');
+          this.$refreshBtn.removeClass('disabled');
+          this.busy = false;
+        });
     },
-});
-
+  });
 })(jQuery);

@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Craft ${{ matrix.craft }} / PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - craft: '4'
+            php: '8.1'
+            constraint: '^4.0'
+            # Craft 4 pins Twig 3.19, which Composer's advisory policy would otherwise block.
+            composer_flags: '--no-blocking'
+          - craft: '5'
+            php: '8.2'
+            constraint: '^5.0'
+            composer_flags: ''
+          - craft: '5'
+            php: '8.3'
+            constraint: '^5.0'
+            composer_flags: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          extensions: bcmath, curl, dom, exif, gd, intl, mbstring, openssl, pdo, zip
+          tools: composer:2
+      - name: Install Craft ${{ matrix.craft }} dependencies
+        run: composer update --with "craftcms/cms:${{ matrix.constraint }}" --with-all-dependencies --no-interaction --prefer-dist ${{ matrix.composer_flags }}
+      - name: Verify installed Craft major
+        run: composer show craftcms/cms "${{ matrix.constraint }}" --locked --no-interaction
+      - run: composer validate --no-check-publish --no-plugins
+      - run: find src tests -name '*.php' -print0 | xargs -0 -n1 php -l
+      - run: node --check src/web/assets/dist/assetmetadata.js
+      - run: composer test
+      - run: composer analyse

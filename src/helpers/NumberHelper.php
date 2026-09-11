@@ -4,16 +4,24 @@ namespace carlcs\assetmetadata\helpers;
 
 use Craft;
 
+/**
+ * Number helpers, available as Twig filters in subfield templates.
+ */
 class NumberHelper
 {
     /**
      * Converts a decimal number to a representation of that number in another numeral system.
+     *
+     * @param int $int The number
+     * @param string $system `roman`, `upperRoman`, `lowerRoman`, `alpha`, `upperAlpha` or `lowerAlpha`
+     * @param int $zero `-1` or `1` to skip zero (which has no roman/alpha representation), anything else keeps the number as-is
      */
     public static function numeralSystem(int $int, string $system, int $zero = -1): int|string
     {
         $int = match ($zero) {
             -1 => ($int < 1) ? $int - 1 : $int,
             1 => ($int > -1) ? $int + 1 : $int,
+            default => $int,
         };
 
         if ($int == 0) {
@@ -37,68 +45,98 @@ class NumberHelper
     }
 
     /**
-     * Formats a number with unit prefixes.
+     * Formats a number with unit prefixes (e.g. `1500` → `1.5 k`, or `1.5 Ki` for the binary system).
+     *
+     * @param mixed $number The number
+     * @param array|string $system A preset (`decimal`, `decimalSymbol`, `decimalNames`, `binary`, `binarySymbol`,
+     * `binaryNames`, `names`) or a settings array with a `map` (exponent => prefix) and optional `base`
      */
-    public static function unitPrefix(float $float, array|string $system = 'decimal', int $decimals = 1, bool $trailingZeros = false, string $decPoint = '.', string $thousandsSep = '', string $unitSep = ' '): string
+    public static function unitPrefix(mixed $number, array|string $system = 'decimal', int $decimals = 1, bool $trailingZeros = false, string $decPoint = '.', string $thousandsSep = '', string $unitSep = ' '): string
     {
+        if (!is_numeric($number)) {
+            return '';
+        }
+
+        $float = (float)$number;
+
         if (is_string($system)) {
             $system = self::_getUnitPrefixSettings($system);
         }
 
-        if (!array_key_exists('map', $system)) {
-            return $float;
+        if (!array_key_exists('map', $system) || !is_array($system['map'])) {
+            return (string)$float;
         }
 
-        $base = array_key_exists('base', $system) ? $system['base'] : 10;
+        $base = array_key_exists('base', $system) ? (float)$system['base'] : 10;
 
-        /** @var array $map */
-        $map = $system['map'];
-
-        foreach ($map as $exp => $prefix) {
+        foreach ($system['map'] as $exp => $prefix) {
             if ($float >= ($base ** $exp)) {
                 $float /= ($base ** $exp);
 
-                $float = number_format($float, $decimals, $decPoint, $thousandsSep);
+                $formatted = number_format($float, $decimals, $decPoint, $thousandsSep);
 
                 if (!$trailingZeros) {
-                    $float = self::trimTrailingZeroes($float, $decPoint);
+                    $formatted = self::trimTrailingZeroes($formatted, $decPoint);
                 }
 
-                return $float.$unitSep.Craft::t('site', $prefix);
+                return $formatted . $unitSep . Craft::t('site', (string)$prefix);
             }
         }
 
-        return $float;
+        return (string)$float;
     }
 
     /**
-     * Converts a fraction to a decimal number.
+     * Converts a fraction (`1/200`, as found in EXIF data) or numeric string to a float.
+     * Non-numeric values result in `0.0`.
      */
-    public static function fractionToFloat(string $str, int $precision = 4): float
+    public static function fractionToFloat(mixed $value, int $precision = 4): float
     {
-        if (self::isFloat($str)) {
-            return $str;
+        if (is_int($value) || is_float($value)) {
+            return (float)$value;
         }
 
-        if (self::isFraction($str)) {
-            list($numerator, $denominator) = explode('/', $str);
-
-            $float = $numerator / ($denominator ?: 1);
-
-            return round($float, $precision);
+        if (!is_string($value)) {
+            return 0.0;
         }
 
-        return 0;
+        $value = trim($value);
+
+        if (self::isFloat($value)) {
+            return (float)$value;
+        }
+
+        if (self::isFraction($value)) {
+            [$numerator, $denominator] = array_map('trim', explode('/', $value));
+            $denominator = (float)$denominator;
+
+            if ($denominator == 0) {
+                return 0.0;
+            }
+
+            return round((float)$numerator / $denominator, $precision);
+        }
+
+        return 0.0;
     }
 
     /**
-     * Converts a decimal number to a fraction.
+     * Converts a decimal number to a fraction (`0.005` → `1/200`).
      */
-    public static function floatToFraction(float $float, float $tolerance = 0.001): string
+    public static function floatToFraction(mixed $value, float $tolerance = 0.001): string
     {
-        if (!self::isFloat($float)) {
-            return 0;
+        if (!is_numeric($value)) {
+            return '0';
         }
+
+        $float = (float)$value;
+
+        if ($float == 0) {
+            return '0';
+        }
+
+        $sign = $float < 0 ? '-' : '';
+        $float = abs($float);
 
         $h1 = 1;
         $h2 = 0;
@@ -116,44 +154,50 @@ class NumberHelper
             $k1 = $a * $k1 + $k2;
             $k2 = $aux;
             $b -= $a;
-        } while (abs($float - $h1 / $k1) > $float * $tolerance);
+        } while ($b != 0 && abs($float - $h1 / $k1) > $float * $tolerance);
 
-        if ($h1 == $k1) {
-            return $h1;
+        if ($k1 == 1) {
+            return $sign . self::_formatNumber($h1);
         }
 
-        return $h1.'/'.$k1;
+        return $sign . self::_formatNumber($h1) . '/' . self::_formatNumber($k1);
     }
 
     /**
-     * Returns whether a number is a fraction.
+     * Returns whether a value is a fraction string like `1/200`.
      */
-    public static function isFraction(string $str): bool
+    public static function isFraction(mixed $value): bool
     {
-        return preg_match('/^[-+]?\d*\.?\d+[ ]?\/[ ]?[-+]?\d*\.?\d+$/', $str);
+        return is_string($value) && preg_match('/^[-+]?\d*\.?\d+[ ]?\/[ ]?[-+]?\d*\.?\d+$/', trim($value)) === 1;
     }
 
     /**
-     * Returns whether a number is a rational number.
+     * Returns whether a value is a (decimal) number.
      */
-    public static function isFloat(float $float): bool
+    public static function isFloat(mixed $value): bool
     {
-        return preg_match('/^[-+]?\d*\.?\d+$/', $float);
+        if (is_int($value) || is_float($value)) {
+            return true;
+        }
+
+        return is_string($value) && preg_match('/^[-+]?\d*\.?\d+$/', trim($value)) === 1;
     }
 
     /**
-     * Trims trailing zeroes.
+     * Trims trailing zeroes (and a dangling decimal point) from a formatted number.
      */
-    public static function trimTrailingZeroes(int $int, string $decPoint = '.'): string
+    public static function trimTrailingZeroes(int|float|string $number, string $decPoint = '.'): string
     {
-        return str_contains($int, $decPoint) ? rtrim(rtrim($int, '0'), $decPoint) : $int;
+        $number = (string)$number;
+
+        return str_contains($number, $decPoint) ? rtrim(rtrim($number, '0'), $decPoint) : $number;
     }
 
     // Private Methods
     // =========================================================================
 
     /**
-     * Converts a decimal number to its roman numberal equivalent.
+     * Converts a decimal number to its roman numeral equivalent.
      */
     private static function _roman(int $int, string $case = 'upper'): string
     {
@@ -173,15 +217,24 @@ class NumberHelper
      */
     private static function _alpha(int $int, string $case = 'upper'): string
     {
-        $counter = 1;
-        for ($alpha = 'A'; $alpha <= 'ZZ'; $alpha++) {
-            if ($counter == $int) {
-                return ($case == 'lower') ? strtolower($alpha) : $alpha;
-            }
-            $counter++;
+        $alpha = '';
+
+        // Bijective base-26: 1 => A, 26 => Z, 27 => AA, …
+        while ($int > 0) {
+            $int--;
+            $alpha = chr(65 + $int % 26) . $alpha;
+            $int = intdiv($int, 26);
         }
 
-        return '';
+        return ($case == 'lower') ? strtolower($alpha) : $alpha;
+    }
+
+    /**
+     * Formats a float that holds an integer value without a decimal part.
+     */
+    private static function _formatNumber(float $number): string
+    {
+        return (string)(floor($number) == $number ? (int)$number : $number);
     }
 
     /**

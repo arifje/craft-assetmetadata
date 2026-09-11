@@ -24,7 +24,7 @@
         template: {
             heading: 'Default Value Template'|t('asset-metadata'),
             info: 'Defines the default value for the subfield for newly uploaded Assets or when values are refreshed.{br}See [Default Value Template]({docUrl}) for details and examples.'|t('asset-metadata', {
-                docUrl: 'https://github.com/carlcs/craft-assetmetadata',
+                docUrl: 'https://github.com/arifje/craft-assetmetadata#subfield-templates',
                 br: '</p><p>',
             }),
             type: 'multiline',
@@ -32,7 +32,8 @@
             width: '60%'
         }
     },
-    rows: field.subfields
+    rows: field.subfields,
+    errors: field.getErrors('subfields'),
 }) }}
 
 {{ forms.checkboxField({
@@ -46,6 +47,7 @@
 <div id="advanced" class="hidden">
     {{ forms.checkboxField({
         label: 'Refresh on element save'|t('asset-metadata'),
+        instructions: 'Re-extract the metadata every time the asset is saved. Without this, the metadata is extracted when the asset is uploaded, when its file is replaced, and when the “Refresh” button is used.'|t('asset-metadata'),
         name: 'refreshOnElementSave',
         checked: field.refreshOnElementSave,
     }) }}

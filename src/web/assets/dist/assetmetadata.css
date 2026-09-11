@@ -17,6 +17,17 @@
     margin-top: 7px;
 }
 
-.assetmetadata-subfield + .btn.assetmetadata-refresh {
+.assetmetadata-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin-top: 14px;
+}
+
+.assetmetadata-example {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border: 1px solid rgba(0, 0, 20, 0.1);
+    border-radius: 3px;
 }

@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+# Developer entry point for the craft-assetmetadata Docker harness.
+# Usage: bin/dev <command> [args...]   (run `bin/dev help` for the list)
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+COMPOSE=(docker compose -f "$ROOT/dev/docker/compose.yaml")
+
+usage() {
+cat <<USAGE
+bin/dev — craft-assetmetadata development commands (everything runs in Docker)
+
+Environments
+  up4 | up5            Build + start Craft 4 (http://localhost:8464) or Craft 5 (http://localhost:8565)
+                       First start creates the Craft project, installs Craft + plugin and seeds a test
+                       volume, an Asset Metadata field and sample assets.
+  down                 Stop all containers (keeps databases and project files)
+  reset4 | reset5      Destroy the Craft 4/5 database + project files (fresh install on next up)
+  logs4 | logs5        Tail container logs
+  shell4 | shell5      Interactive bash inside the Craft container
+
+Craft / Composer
+  craft4 <args>        Run the Craft CLI, e.g. bin/dev craft4 asset-metadata/extract 12
+  craft5 <args>
+  composer4 <args>     Run composer inside the Craft 4/5 project
+  composer5 <args>
+  install4 | install5  (Re)install/upgrade the plugin: composer update + plugin/install
+  seed4 | seed5        Re-run the volume/field/asset seed script
+  admin4 | admin5      (Re)create the harness admin user (admin / password)
+  both <args>          Run the Craft CLI in both environments
+
+Tests (the plugin source is bind-mounted at /plugin)
+  phpunit4 | phpunit5  Unit tests (no DB) against the Craft 4 / Craft 5 dependency tree
+  integration4 | integration5
+                       Integration tests inside the running Craft 4 / Craft 5 installation
+  phpstan4 | phpstan5  PHPStan static analysis against the Craft 4 / Craft 5 dependency tree
+  lint                 php -l on every plugin PHP file + node --check on the JS
+  check4 | check5      lint + phpstan + phpunit + integration for one Craft version
+  check                check4 + check5
+
+Credentials for the CP: admin / password
+USAGE
+}
+
+craft_exec() { # <service> <args...>
+    local svc="$1"; shift
+    "${COMPOSE[@]}" --profile "$svc" exec -T "$svc" php craft "$@"
+}
+in_container() { # <service> <cmd...>
+    local svc="$1"; shift
+    "${COMPOSE[@]}" --profile "$svc" exec -T "$svc" "$@"
+}
+in_plugin() { # <service> <cmd...>  (run in /plugin inside the given Craft container)
+    local svc="$1"; shift
+    "${COMPOSE[@]}" --profile "$svc" exec -T -w /plugin "$svc" "$@"
+}
+# The plugin gets its own dependency tree per Craft major, so unit tests and PHPStan run
+# against the exact framework version of that container.
+plugin_vendor_dir() { # <service>
+    if [ "$1" = "craft4" ]; then echo "vendor-craft4"; else echo "vendor"; fi
+}
+ensure_plugin_vendor() { # <service>
+    local svc="$1" dir; dir="$(plugin_vendor_dir "$svc")"
+    if ! in_plugin "$svc" test -f "/plugin/$dir/bin/phpunit"; then
+        local major="5" flags=""; if [ "$svc" = "craft4" ]; then major="4"; flags="--no-blocking"; fi
+        echo "==> Installing plugin dev dependencies for Craft $major into /plugin/$dir"
+        in_plugin "$svc" env COMPOSER_VENDOR_DIR="$dir" composer update --with "craftcms/cms:^${major}.0" --with-all-dependencies --no-interaction --no-progress --prefer-dist $flags
+    fi
+}
+run_phpunit() { # <service>
+    ensure_plugin_vendor "$1"
+    in_plugin "$1" env ASSET_METADATA_VENDOR_DIR="/plugin/$(plugin_vendor_dir "$1")" "$(plugin_vendor_dir "$1")/bin/phpunit" --testdox "${@:2}"
+}
+run_phpstan() { # <service>
+    ensure_plugin_vendor "$1"
+    local dir; dir="$(plugin_vendor_dir "$1")"
+    if [ "$dir" = "vendor" ]; then
+        in_plugin "$1" vendor/bin/phpstan analyse --memory-limit=1G --no-progress "${@:2}"
+    else
+        # Both vendor trees generate the same Composer autoloader class name, so PHPStan must run from a
+        # directory without a composer.json, with a config that points at the Craft 4 tree explicitly.
+        in_plugin "$1" bash -c 'printf "includes:\n    - /plugin/vendor-craft4/craftcms/phpstan/phpstan.neon\n\nparameters:\n    level: 5\n    paths:\n        - /plugin/src\n    tmpDir: /tmp/phpstan-craft4-cache\n    treatPhpDocTypesAsCertain: false\n" > /tmp/phpstan-craft4.neon'
+        "${COMPOSE[@]}" --profile "$1" exec -T -w /tmp "$1" /plugin/vendor-craft4/bin/phpstan analyse --memory-limit=1G --no-progress -c /tmp/phpstan-craft4.neon "${@:2}"
+    fi
+}
+run_integration() { # <service>
+    in_container "$1" php /app/vendor/bin/phpunit -c /plugin/phpunit.integration.xml.dist --testdox "${@:2}"
+}
+
+cmd="${1:-help}"; shift || true
+case "$cmd" in
+    up4)   "${COMPOSE[@]}" --profile craft4 up -d --build "$@" ;;
+    up5)   "${COMPOSE[@]}" --profile craft5 up -d --build "$@" ;;
+    down)  "${COMPOSE[@]}" --profile craft4 --profile craft5 down ;;
+    reset4) "${COMPOSE[@]}" --profile craft4 down -v; rm -rf "$ROOT/dev/craft4" ;;
+    reset5) "${COMPOSE[@]}" --profile craft5 down -v; rm -rf "$ROOT/dev/craft5" ;;
+    logs4) "${COMPOSE[@]}" --profile craft4 logs -f --tail=200 craft4 ;;
+    logs5) "${COMPOSE[@]}" --profile craft5 logs -f --tail=200 craft5 ;;
+    shell4) "${COMPOSE[@]}" --profile craft4 exec craft4 bash ;;
+    shell5) "${COMPOSE[@]}" --profile craft5 exec craft5 bash ;;
+    craft4) craft_exec craft4 "$@" ;;
+    craft5) craft_exec craft5 "$@" ;;
+    both)  echo "== Craft 4 =="; craft_exec craft4 "$@"; echo "== Craft 5 =="; craft_exec craft5 "$@" ;;
+    composer4) in_container craft4 composer "$@" ;;
+    composer5) in_container craft5 composer "$@" ;;
+    install4) in_container craft4 composer update carlcs/craft-assetmetadata --no-interaction --no-blocking; craft_exec craft4 plugin/install asset-metadata || craft_exec craft4 migrate/all --plugin=asset-metadata ;;
+    install5) in_container craft5 composer update carlcs/craft-assetmetadata --no-interaction; craft_exec craft5 plugin/install asset-metadata || craft_exec craft5 migrate/all --plugin=asset-metadata ;;
+    seed4) in_container craft4 php /scripts/seed.php ;;
+    seed5) in_container craft5 php /scripts/seed.php ;;
+    admin4) in_container craft4 php /scripts/ensure-admin.php ;;
+    admin5) in_container craft5 php /scripts/ensure-admin.php ;;
+    phpunit4) run_phpunit craft4 "$@" ;;
+    phpunit5) run_phpunit craft5 "$@" ;;
+    integration4) run_integration craft4 "$@" ;;
+    integration5) run_integration craft5 "$@" ;;
+    phpstan4) run_phpstan craft4 "$@" ;;
+    phpstan5) run_phpstan craft5 "$@" ;;
+    lint)    in_plugin craft5 bash -c 'set -e; find src tests -name "*.php" -print0 | xargs -0 -n1 php -l | grep -v "No syntax errors" || true; echo "lint ok"'; command -v node >/dev/null && node --check "$ROOT/src/web/assets/dist/assetmetadata.js" && echo "js ok" ;;
+    check4)  "$0" phpstan4; "$0" phpunit4; "$0" integration4 ;;
+    check5)  "$0" lint; "$0" phpstan5; "$0" phpunit5; "$0" integration5 ;;
+    check)   "$0" check4; "$0" check5 ;;
+    help|-h|--help) usage ;;
+    *) echo "Unknown command: $cmd"; usage; exit 1 ;;
+esac

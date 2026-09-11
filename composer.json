@@ -1,6 +1,6 @@
 {
   "name": "carlcs/craft-assetmetadata",
-  "description": "Asset Metadata plugin for Craft CMS",
+  "description": "Asset Metadata plugin for Craft CMS: a field type that extracts and stores metadata (EXIF, ID3, media info) from Asset files.",
   "version": "5.1.0",
   "type": "craft-plugin",
   "keywords": [
@@ -8,6 +8,8 @@
     "image",
     "audio",
     "metadata",
+    "exif",
+    "id3",
     "field",
     "craftcms"
   ],
@@ -16,24 +18,64 @@
     {
       "name": "carlcs",
       "homepage": "https://github.com/carlcs"
+    },
+    {
+      "name": "Arjan Brinkman",
+      "homepage": "https://github.com/arifje"
     }
   ],
   "support": {
-    "issues": "https://github.com/carlcs/craft-deleteentryversions/issues?state=open",
-    "source": "https://github.com/carlcs/craft-deleteentryversions",
-    "docs": "https://github.com/carlcs/craft-deleteentryversions"
+    "issues": "https://github.com/arifje/craft-assetmetadata/issues",
+    "source": "https://github.com/arifje/craft-assetmetadata",
+    "docs": "https://github.com/arifje/craft-assetmetadata#readme"
   },
   "require": {
-    "craftcms/cms": "^4.0.0|^5.0.0",
+    "php": ">=8.0.2",
+    "ext-json": "*",
+    "ext-mbstring": "*",
+    "craftcms/cms": "^4.0.0 || ^5.0.0",
     "james-heinrich/getid3": "^1.9.15"
   },
+  "require-dev": {
+    "craftcms/phpstan": "dev-main",
+    "phpstan/phpstan": "^1.12 || ^2.0",
+    "phpunit/phpunit": "^9.6 || ^10.5"
+  },
+  "repositories": [
+    {
+      "type": "composer",
+      "url": "https://composer.craftcms.com",
+      "canonical": false
+    }
+  ],
   "autoload": {
     "psr-4": {
       "carlcs\\assetmetadata\\": "src/"
     }
   },
+  "autoload-dev": {
+    "psr-4": {
+      "carlcs\\assetmetadata\\tests\\": "tests/"
+    }
+  },
   "extra": {
     "handle": "asset-metadata",
-    "name": "Asset Metadata"
-  }
+    "name": "Asset Metadata",
+    "class": "carlcs\\assetmetadata\\Plugin",
+    "documentationUrl": "https://github.com/arifje/craft-assetmetadata#readme",
+    "changelogUrl": "https://raw.githubusercontent.com/arifje/craft-assetmetadata/v5/CHANGELOG.md"
+  },
+  "config": {
+    "allow-plugins": {
+      "craftcms/plugin-installer": true,
+      "yiisoft/yii2-composer": true
+    },
+    "sort-packages": true
+  },
+  "scripts": {
+    "test": "phpunit --testdox",
+    "analyse": "phpstan analyse --no-progress --memory-limit=1G"
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true
 }

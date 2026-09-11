@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Integration tests: run inside a Craft installation (the Docker harness in dev/, see bin/dev).
+    They bootstrap the real Craft application, create disposable fields/volumes/assets and clean up again.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/9.6/phpunit.xsd"
+         bootstrap="tests/integration/bootstrap.php"
+         colors="true"
+         failOnWarning="true">
+    <testsuites>
+        <testsuite name="integration">
+            <directory>tests/integration</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>
